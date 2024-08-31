@@ -5,8 +5,10 @@ import android.content.Context
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.BufferOverflow
@@ -108,22 +110,27 @@ class Updater : IUpdater {
     }
 
     private fun autoUpdateTask() {
-        val lastAutomatedUpdate = preferences.getLong(lastAutomatedUpdateKey, 0)
-        preferences.edit().putLong(lastAutomatedUpdateKey, System.currentTimeMillis()).apply()
+        try {
+            val lastAutomatedUpdate = preferences.getLong(lastAutomatedUpdateKey, 0)
+            preferences.edit().putLong(lastAutomatedUpdateKey, System.currentTimeMillis()).apply()
 
-        if (getStatus().running) {
-            logger.debug { "Global update is already in progress" }
-            return
-        }
+            if (getStatus().running) {
+                logger.debug { "Global update is already in progress" }
+                return
+            }
 
-        logger.info {
-            "Trigger global update (interval= ${serverConfig.globalUpdateInterval.value}h, lastAutomatedUpdate= ${Date(
-                lastAutomatedUpdate,
-            )})"
+            logger.info {
+                "Trigger global update (interval= ${serverConfig.globalUpdateInterval.value}h, lastAutomatedUpdate= ${Date(
+                    lastAutomatedUpdate,
+                )})"
+            }
+            addCategoriesToUpdateQueue(Category.getCategoryList(), clear = true, forceAll = false)
+        } catch (e: Exception) {
+            logger.error(e) { "autoUpdateTask: failed due to" }
         }
-        addCategoriesToUpdateQueue(Category.getCategoryList(), clear = true, forceAll = false)
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     fun scheduleUpdateTask() {
         HAScheduler.deschedule(currentUpdateTaskId)
 
@@ -141,7 +148,9 @@ class Updater : IUpdater {
                 if (lastAutomatedUpdate > 0) lastAutomatedUpdate else System.currentTimeMillis()
             ) < updateInterval
         if (!wasPreviousUpdateTriggered) {
-            autoUpdateTask()
+            GlobalScope.launch {
+                autoUpdateTask()
+            }
         }
 
         HAScheduler.schedule(::autoUpdateTask, updateInterval, timeToNextExecution, "global-update")
@@ -225,7 +234,7 @@ class Updater : IUpdater {
         tracker[job.manga.id] =
             try {
                 logger.info { "Updating ${job.manga}" }
-                if (serverConfig.updateMangas.value) {
+                if (serverConfig.updateMangas.value || !job.manga.initialized) {
                     Manga.getManga(job.manga.id, true)
                 }
                 Chapter.getChapterList(job.manga.id, true)
@@ -329,11 +338,11 @@ class Updater : IUpdater {
         )
     }
 
-    private fun addMangasToQueue(mangasToUpdate: List<MangaDataClass>) {
+    override fun addMangasToQueue(mangas: List<MangaDataClass>) {
         // create all manga update jobs before adding them to the queue so that the client is able to calculate the
         // progress properly right form the start
-        mangasToUpdate.forEach { tracker[it.id] = UpdateJob(it) }
-        mangasToUpdate.forEach { addMangaToQueue(it) }
+        mangas.forEach { tracker[it.id] = UpdateJob(it) }
+        mangas.forEach { addMangaToQueue(it) }
     }
 
     private fun addMangaToQueue(manga: MangaDataClass) {
