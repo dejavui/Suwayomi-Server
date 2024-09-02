@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Gradle Wrapper
-        uses: gradle/wrapper-validation-action@v1
+        uses: gradle/wrapper-validation-action@v3
 
   build:
     name: Build Jar
@@ -47,7 +47,7 @@ jobs:
             ~/.gradle/gradle.properties
 
       - name: Build and copy webUI, Build Jar
-        uses: gradle/gradle-build-action@v2
+        uses: gradle/gradle-build-action@v3
         env:
           ProductBuildType: "Stable"
         with:
@@ -167,7 +167,7 @@ jobs:
         run: cd release && sha256sum * > Checksums.sha256
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.DEPLOY_RELEASE_TOKEN }}
           draft: true
