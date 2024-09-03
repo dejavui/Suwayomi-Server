@@ -1,13 +1,13 @@
 [versions]
-kotlin = "1.9.10"
-coroutines = "1.7.3"
+kotlin = "2.0.20"
+coroutines = "1.8.1"
 serialization = "1.6.0"
-okhttp = "5.0.0-alpha.11" # Major version is locked by Tachiyomi extensions
+okhttp = "5.0.0-alpha.14" # Major version is locked by Tachiyomi extensions
 javalin = "4.6.8" # Javalin 5.0.0+ requires Java 11
 jackson = "2.13.3" # jackson version locked by javalin, ref: `io.javalin.core.util.OptionalDependency`
 exposed = "0.40.1"
 dex2jar = "v64" # Stuck until https://github.com/ThexXTURBOXx/dex2jar/issues/27 is fixed
-rhino = "1.7.14"
+rhino = "1.7.15"
 settings = "1.0.0-RC"
 twelvemonkeys = "3.9.4"
 graphqlkotlin = "6.5.6"
@@ -33,7 +33,7 @@ serialization-xml-core = { module = "io.github.pdvrieze.xmlutil:core-jvm", versi
 serialization-xml = { module = "io.github.pdvrieze.xmlutil:serialization-jvm", version.ref = "xmlserialization" }
 
 # Logging
-slf4japi = "org.slf4j:slf4j-api:2.0.9"
+slf4japi = "org.slf4j:slf4j-api:2.0.16"
 logback = "ch.qos.logback:logback-classic:1.3.11"
 kotlinlogging = "io.github.microutils:kotlin-logging:3.0.5"
 
@@ -102,7 +102,7 @@ apksig = "com.android.tools.build:apksig:7.2.1"
 xmlpull = "xmlpull:xmlpull:1.1.3.4a"
 
 # Disk & File
-appdirs = "net.harawata:appdirs:1.2.1"
+appdirs = "net.harawata:appdirs:1.2.2"
 zip4j = "net.lingala.zip4j:zip4j:2.11.5"
 commonscompress = "org.apache.commons:commons-compress:1.24.0"
 junrar = "com.github.junrar:junrar:7.5.5"
@@ -111,7 +111,7 @@ junrar = "com.github.junrar:junrar:7.5.5"
 bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.76"
 
 # AndroidX annotations
-android-annotations = "androidx.annotation:annotation:1.7.0"
+android-annotations = "androidx.annotation:annotation:1.8.2"
 
 # Substitute for duktape-android
 rhino-runtime = { module = "org.mozilla:rhino-runtime", version.ref = "rhino" }  # slimmer version of 'org.mozilla:rhino'
@@ -142,13 +142,16 @@ cron4j = "it.sauronsoftware.cron4j:cron4j:2.2.5"
 # cron-utils
 cronUtils = "com.cronutils:cron-utils:9.2.1"
 
+# lint - used for renovate to update ktlint version
+ktlint = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint" }
+
 [plugins]
 # Kotlin
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin"}
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin"}
 
 # Linter
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "11.6.0"}
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "11.6.1"}
 
 # Build config
 buildconfig = { id = "com.github.gmazzo.buildconfig", version = "3.1.0"}
