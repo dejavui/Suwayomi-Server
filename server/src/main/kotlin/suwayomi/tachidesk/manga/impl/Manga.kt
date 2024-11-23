@@ -15,7 +15,7 @@ import eu.kanade.tachiyomi.source.local.LocalSource
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
-import io.javalin.http.HttpCode
+import io.javalin.http.HttpStatus
 import mu.KLogger
 import mu.KotlinLogging
 import okhttp3.CacheControl
@@ -27,9 +27,6 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.kodein.di.DI
-import org.kodein.di.conf.global
-import org.kodein.di.instance
 import suwayomi.tachidesk.manga.impl.MangaList.proxyThumbnailUrl
 import suwayomi.tachidesk.manga.impl.Source.getSource
 import suwayomi.tachidesk.manga.impl.download.fileProvider.impl.MissingThumbnailException
@@ -118,28 +115,42 @@ object Manga {
             getCatalogueSourceOrNull(mangaEntry[MangaTable.sourceReference])
                 ?: return null
         val sManga =
-            SManga.create().apply {
-                url = mangaEntry[MangaTable.url]
-                title = mangaEntry[MangaTable.title]
-            }
-        val networkManga = source.getMangaDetails(sManga)
-        sManga.copyFrom(networkManga)
+            source.getMangaDetails(
+                SManga.create().apply {
+                    url = mangaEntry[MangaTable.url]
+                    title = mangaEntry[MangaTable.title]
+                    thumbnail_url = mangaEntry[MangaTable.thumbnail_url]
+                    artist = mangaEntry[MangaTable.artist]
+                    author = mangaEntry[MangaTable.author]
+                    description = mangaEntry[MangaTable.description]
+                    genre = mangaEntry[MangaTable.genre]
+                    status = mangaEntry[MangaTable.status]
+                    update_strategy = UpdateStrategy.valueOf(mangaEntry[MangaTable.updateStrategy])
+                },
+            )
 
         transaction {
             MangaTable.update({ MangaTable.id eq mangaId }) {
-                if (sManga.title != mangaEntry[MangaTable.title]) {
-                    val canUpdateTitle = updateMangaDownloadDir(mangaId, sManga.title)
+                val remoteTitle =
+                    try {
+                        sManga.title
+                    } catch (_: UninitializedPropertyAccessException) {
+                        ""
+                    }
+                if (remoteTitle.isNotEmpty() && remoteTitle != mangaEntry[MangaTable.title]) {
+                    val canUpdateTitle = updateMangaDownloadDir(mangaId, remoteTitle)
 
                     if (canUpdateTitle) {
-                        it[MangaTable.title] = sManga.title
+                        it[MangaTable.title] = remoteTitle
                     }
                 }
                 it[MangaTable.initialized] = true
 
-                it[MangaTable.artist] = sManga.artist
-                it[MangaTable.author] = sManga.author
-                it[MangaTable.description] = truncate(sManga.description, 4096)
-                it[MangaTable.genre] = sManga.genre
+                it[MangaTable.artist] = sManga.artist ?: mangaEntry[MangaTable.artist]
+                it[MangaTable.author] = sManga.author ?: mangaEntry[MangaTable.author]
+                it[MangaTable.description] = sManga.description?.let { truncate(it, 4096) }
+                    ?: mangaEntry[MangaTable.description]
+                it[MangaTable.genre] = sManga.genre ?: mangaEntry[MangaTable.genre]
                 it[MangaTable.status] = sManga.status
                 if (!sManga.thumbnail_url.isNullOrEmpty() && sManga.thumbnail_url != mangaEntry[MangaTable.thumbnail_url]) {
                     it[MangaTable.thumbnail_url] = sManga.thumbnail_url
@@ -149,7 +160,19 @@ object Manga {
 
                 it[MangaTable.realUrl] =
                     runCatching {
-                        (source as? HttpSource)?.getMangaUrl(sManga)
+                        (source as? HttpSource)?.getMangaUrl(
+                            SManga.create().apply {
+                                url = mangaEntry[MangaTable.url]
+                                title = remoteTitle.ifEmpty { mangaEntry[MangaTable.title] }
+                                thumbnail_url = mangaEntry[MangaTable.thumbnail_url]
+                                artist = sManga.artist ?: mangaEntry[MangaTable.artist]
+                                author = sManga.author ?: mangaEntry[MangaTable.author]
+                                description = sManga.description ?: mangaEntry[MangaTable.description]
+                                genre = sManga.genre ?: mangaEntry[MangaTable.genre]
+                                status = sManga.status
+                                update_strategy = sManga.update_strategy
+                            },
+                        )
                     }.getOrNull()
 
                 it[MangaTable.lastFetchedAt] = Instant.now().epochSecond
@@ -265,7 +288,7 @@ object Manga {
         }[MangaTable.thumbnail_url]
     }
 
-    private val applicationDirs by DI.global.instance<ApplicationDirs>()
+    private val applicationDirs: ApplicationDirs by injectLazy()
     private val network: NetworkHelper by injectLazy()
 
     private suspend fun fetchHttpSourceMangaThumbnail(
@@ -294,9 +317,9 @@ object Manga {
             val tryToRefreshUrl =
                 !refreshUrl &&
                     listOf(
-                        HttpCode.GONE.status,
-                        HttpCode.MOVED_PERMANENTLY.status,
-                        HttpCode.NOT_FOUND.status,
+                        HttpStatus.GONE.code,
+                        HttpStatus.MOVED_PERMANENTLY.code,
+                        HttpStatus.NOT_FOUND.code,
                         523, // (Cloudflare) Origin Is Unreachable
                         522, // (Cloudflare) Connection timed out
                     ).contains(e.code)

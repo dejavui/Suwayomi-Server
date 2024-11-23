@@ -13,11 +13,7 @@ import com.expediagroup.graphql.server.types.GraphQLRequest
 import com.expediagroup.graphql.server.types.GraphQLServerRequest
 import io.javalin.http.Context
 import io.javalin.http.UploadedFile
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
+import io.javalin.json.fromJsonString
 import java.io.IOException
 
 class JavalinGraphQLRequestParser : GraphQLRequestParser<Context> {
@@ -33,19 +29,17 @@ class JavalinGraphQLRequestParser : GraphQLRequestParser<Context> {
                     context.formParam("operations")
                         ?: throw IllegalArgumentException("Cannot find 'operations' body")
                 } else {
-                    return Json.decodeFromStream<GraphQLServerRequest>(context.bodyAsInputStream())
+                    return context.bodyAsClass(GraphQLServerRequest::class.java)
                 }
 
             val request =
-                Json.decodeFromString<GraphQLServerRequest>(formParam)
+                context.jsonMapper().fromJsonString<GraphQLServerRequest>(formParam)
+
             val map =
                 context
                     .formParam("map")
                     ?.let {
-                        Json.decodeFromString(
-                            MapSerializer(String.serializer(), ListSerializer(String.serializer())),
-                            it,
-                        )
+                        context.jsonMapper().fromJsonString<Map<String, List<String>>>(it)
                     }.orEmpty()
 
             val mapItems =

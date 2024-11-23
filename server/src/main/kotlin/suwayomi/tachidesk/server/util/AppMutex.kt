@@ -7,18 +7,17 @@ package suwayomi.tachidesk.server.util
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-import io.javalin.plugin.json.JsonMapper
+import io.javalin.json.JsonMapper
+import io.javalin.json.fromJsonString
 import mu.KotlinLogging
 import okhttp3.OkHttpClient
 import okhttp3.Request.Builder
-import org.kodein.di.DI
-import org.kodein.di.conf.global
-import org.kodein.di.instance
 import suwayomi.tachidesk.global.impl.AboutDataClass
 import suwayomi.tachidesk.server.serverConfig
 import suwayomi.tachidesk.server.util.Browser.openInBrowser
 import suwayomi.tachidesk.server.util.ExitCode.MutexCheckFailedAnotherAppRunning
 import suwayomi.tachidesk.server.util.ExitCode.MutexCheckFailedTachideskRunning
+import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -35,7 +34,7 @@ object AppMutex {
 
     private val appIP = if (serverConfig.ip.value == "0.0.0.0") "127.0.0.1" else serverConfig.ip.value
 
-    private val jsonMapper by DI.global.instance<JsonMapper>()
+    private val jsonMapper: JsonMapper by injectLazy()
 
     private fun checkAppMutex(): AppMutexState {
         val client =
@@ -61,7 +60,7 @@ object AppMutex {
             }
 
         return try {
-            jsonMapper.fromJsonString(response, AboutDataClass::class.java)
+            jsonMapper.fromJsonString<AboutDataClass>(response)
             AppMutexState.TachideskInstanceRunning
         } catch (e: IOException) {
             AppMutexState.OtherApplicationRunning

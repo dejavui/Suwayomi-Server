@@ -1,11 +1,8 @@
 package suwayomi.tachidesk.manga.controller
 
-import io.javalin.http.HttpCode
+import io.javalin.http.HttpStatus
 import io.javalin.websocket.WsConfig
 import mu.KotlinLogging
-import org.kodein.di.DI
-import org.kodein.di.conf.global
-import org.kodein.di.instance
 import suwayomi.tachidesk.manga.impl.Category
 import suwayomi.tachidesk.manga.impl.Chapter
 import suwayomi.tachidesk.manga.impl.update.IUpdater
@@ -18,6 +15,8 @@ import suwayomi.tachidesk.server.util.formParam
 import suwayomi.tachidesk.server.util.handler
 import suwayomi.tachidesk.server.util.pathParam
 import suwayomi.tachidesk.server.util.withOperation
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 /*
  * Copyright (C) Contributors to the Suwayomi project
@@ -40,14 +39,14 @@ object UpdateController {
                 }
             },
             behaviorOf = { ctx, pageNum ->
-                ctx.future(
+                ctx.future {
                     future {
                         Chapter.getRecentChapters(pageNum)
-                    },
-                )
+                    }.thenApply { ctx.json(it) }
+                }
             },
             withResults = {
-                json<PagedMangaChapterListDataClass>(HttpCode.OK)
+                json<PagedMangaChapterListDataClass>(HttpStatus.OK)
             },
         )
 
@@ -67,7 +66,7 @@ object UpdateController {
                 }
             },
             behaviorOf = { ctx, categoryId ->
-                val updater by DI.global.instance<IUpdater>()
+                val updater = Injekt.get<IUpdater>()
                 if (categoryId == null) {
                     logger.info { "Adding Library to Update Queue" }
                     updater.addCategoriesToUpdateQueue(
@@ -85,13 +84,13 @@ object UpdateController {
                         )
                     } else {
                         logger.info { "No Category found" }
-                        ctx.status(HttpCode.BAD_REQUEST)
+                        ctx.status(HttpStatus.BAD_REQUEST)
                     }
                 }
             },
             withResults = {
-                httpCode(HttpCode.OK)
-                httpCode(HttpCode.BAD_REQUEST)
+                httpCode(HttpStatus.OK)
+                httpCode(HttpStatus.BAD_REQUEST)
             },
         )
 
@@ -116,11 +115,11 @@ object UpdateController {
                 }
             },
             behaviorOf = { ctx ->
-                val updater by DI.global.instance<IUpdater>()
+                val updater = Injekt.get<IUpdater>()
                 ctx.json(updater.statusDeprecated.value)
             },
             withResults = {
-                json<UpdateStatus>(HttpCode.OK)
+                json<UpdateStatus>(HttpStatus.OK)
             },
         )
 
@@ -133,18 +132,18 @@ object UpdateController {
                 }
             },
             behaviorOf = { ctx ->
-                val updater by DI.global.instance<IUpdater>()
+                val updater = Injekt.get<IUpdater>()
                 logger.info { "Resetting Updater" }
-                ctx.future(
+                ctx.future {
                     future {
                         updater.reset()
                     }.thenApply {
-                        ctx.status(HttpCode.OK)
-                    },
-                )
+                        ctx.status(HttpStatus.OK)
+                    }
+                }
             },
             withResults = {
-                httpCode(HttpCode.OK)
+                httpCode(HttpStatus.OK)
             },
         )
 }
