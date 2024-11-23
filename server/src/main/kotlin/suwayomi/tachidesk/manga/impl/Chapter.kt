@@ -138,7 +138,18 @@ object Chapter {
                 val sManga =
                     SManga.create().apply {
                         title = manga.title
+                        
                         url = manga.url
+                    
+                        artist = manga.artist
+                    
+                        author = manga.author
+                    
+                        description = manga.description
+                    
+                        genre = manga.genre
+                    
+                        thumbnail_url = manga.thumbnail_url
                     }
 
                 val currentLatestChapterNumber = Manga.getLatestChapter(mangaId)?.chapterNumber ?: 0f
