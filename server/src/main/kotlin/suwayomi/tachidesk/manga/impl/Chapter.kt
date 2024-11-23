@@ -147,9 +147,6 @@ object Chapter {
                     
                         description = manga.description
                     
-                        genre = manga.genre
-                    
-                        thumbnail_url = manga.thumbnail_url
                     }
 
                 val currentLatestChapterNumber = Manga.getLatestChapter(mangaId)?.chapterNumber ?: 0f
