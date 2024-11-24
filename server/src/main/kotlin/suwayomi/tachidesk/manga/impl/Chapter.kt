@@ -43,6 +43,7 @@ import suwayomi.tachidesk.manga.model.table.ChapterTable
 import suwayomi.tachidesk.manga.model.table.MangaTable
 import suwayomi.tachidesk.manga.model.table.PageTable
 import suwayomi.tachidesk.manga.model.table.toDataClass
+import suwayomi.tachidesk.server.database.DBManager.db
 import suwayomi.tachidesk.server.serverConfig
 import java.time.Instant
 import java.util.TreeSet
@@ -101,7 +102,7 @@ object Chapter {
 
             ChapterDataClass(
                 id = dbChapter[ChapterTable.id].value,
-                url = it.url,
+                url = it.url.replace("?utm_source=default_app",""),
                 name = it.name,
                 uploadDate = it.date_upload,
                 chapterNumber = it.chapter_number,

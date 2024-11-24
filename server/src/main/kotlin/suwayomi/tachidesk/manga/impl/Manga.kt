@@ -86,7 +86,7 @@ object Manga {
                 sourceId = mangaEntry[MangaTable.sourceReference].toString(),
                 url = mangaEntry[MangaTable.url],
                 title = mangaEntry[MangaTable.title],
-                thumbnailUrl = proxyThumbnailUrl(mangaId),
+                thumbnailUrl = sManga.thumbnail_url,
                 thumbnailUrlLastFetched = mangaEntry[MangaTable.thumbnailUrlLastFetched],
                 initialized = true,
                 artist = sManga.artist,
