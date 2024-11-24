@@ -102,7 +102,7 @@ object Chapter {
 
             ChapterDataClass(
                 id = dbChapter[ChapterTable.id].value,
-                url = it.url.replace("?utm_source=default_app",""),
+                url = it.url,
                 name = it.name,
                 uploadDate = it.date_upload,
                 chapterNumber = it.chapter_number,
