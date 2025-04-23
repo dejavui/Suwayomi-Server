@@ -28,7 +28,7 @@ main() {
   OS="$1"
   JAR="$(ls server/build/*.jar | tail -n1)"
   RELEASE_NAME="$(echo "${JAR%.*}" | xargs basename)-$OS"
-  RELEASE_VERSION="$(tmp="${JAR%-*}"; echo "${tmp##*-}" | tr -d v)"
+  RELEASE_VERSION=$(echo "$JAR" | grep -oP "v\K[0-9]+\.[0-9]+\.[0-9]+")
   #RELEASE_REVISION_NUMBER="$(tmp="${JAR%.*}" && echo "${tmp##*-}" | tr -d r)"
   local electron_version="v28.1.3"
 
@@ -78,7 +78,7 @@ main() {
       setup_jre
       tree "$RELEASE_NAME"
 
-      RELEASE="$RELEASE_NAME.zip"
+      RELEASE="$RELEASE_NAME.tar.gz"
       make_macos_bundle
       move_release_to_output_dir
       ;;
@@ -94,7 +94,7 @@ main() {
       setup_jre
       tree "$RELEASE_NAME"
 
-      RELEASE="$RELEASE_NAME.zip"
+      RELEASE="$RELEASE_NAME.tar.gz"
       make_macos_bundle
       move_release_to_output_dir
       ;;
@@ -148,19 +148,21 @@ download_electron() {
 
 setup_jre() {
   if [ -d "jre" ]; then
+    chmod +x ./jre/bin/java
+    chmod +x ./jre/lib/jspawnhelper
     mv "jre" "$RELEASE_NAME/jre"
   else
     if [ ! -f "$JRE" ]; then
-        curl -L "$JRE_URL" -o "$JRE"
-      fi
+      curl -L "$JRE_URL" -o "$JRE"
+    fi
 
-      local ext="${JRE##*.}"
-      if [ "$ext" = "zip" ]; then
-        unzip "$JRE"
-      else
-        tar xvf "$JRE"
-      fi
-      mv "$JRE_DIR" "$RELEASE_NAME/jre"
+    local ext="${JRE##*.}"
+    if [ "$ext" = "zip" ]; then
+      unzip "$JRE"
+    else
+      tar xvf "$JRE"
+    fi
+    mv "$JRE_DIR" "$RELEASE_NAME/jre"
   fi
 }
 
@@ -191,7 +193,7 @@ make_macos_bundle() {
   cp "$JAR" "$RELEASE_NAME/bin/Suwayomi-Server.jar"
   cp "scripts/resources/Suwayomi Launcher.command" "$RELEASE_NAME/"
 
-  zip -9 -r "$RELEASE" "$RELEASE_NAME/"
+  tar -I "gzip -9" -cvf "$RELEASE" "$RELEASE_NAME/"
 }
 
 # https://wiki.debian.org/SimplePackagingTutorial
