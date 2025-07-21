@@ -26,7 +26,6 @@ import suwayomi.tachidesk.manga.model.table.MangaTable
 import suwayomi.tachidesk.server.serverConfig
 import suwayomi.tachidesk.util.ConversionUtil
 import java.io.File
-import java.io.IOException
 import java.io.InputStream
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
@@ -232,26 +231,26 @@ abstract class ChaptersFilesProvider<Type : FileType>(
                     val writerParams = writer.defaultWriteParam
                     targetConversion.compressionLevel?.let {
                         writerParams.compressionMode = ImageWriteParam.MODE_EXPLICIT
-                        writerParams.compressionQuality = it
+                        writerParams.compressionQuality = it.toFloat()
                     }
                     val success =
                         try {
-                            ImageIO.createImageOutputStream(outFile)
-                        } catch (e: IOException) {
-                            logger.warn(e) { "Conversion aborted" }
-                            return@forEach
-                        }.use { outStream ->
-                            writer.setOutput(outStream)
+                            ImageIO.createImageOutputStream(outFile).use { outStream ->
+                                writer.setOutput(outStream)
 
-                            val inImage = ConversionUtil.readImage(it) ?: return@use false
-                            writer.write(null, IIOImage(inImage, null, null), writerParams)
-                            return@use true
+                                val inImage = ConversionUtil.readImage(it) ?: return@use false
+                                writer.write(null, IIOImage(inImage, null, null), writerParams)
+
+                                true
+                            }
+                        } catch (e: Exception) {
+                            logger.warn(e) { "Conversion aborted: for image $it" }
+                            false
                         }
                     writer.dispose()
                     if (success) {
                         it.delete()
                     } else {
-                        logger.warn { "Conversion aborted: No reader for image $it" }
                         outFile.delete()
                     }
                 }
