@@ -13,16 +13,19 @@ import libcore.net.MimeUtils
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
+import suwayomi.tachidesk.graphql.types.DownloadConversion
 import suwayomi.tachidesk.manga.impl.Page
 import suwayomi.tachidesk.manga.impl.chapter.getChapterDownloadReady
 import suwayomi.tachidesk.manga.impl.download.model.DownloadChapter
+import suwayomi.tachidesk.manga.impl.util.KoreaderHelper
 import suwayomi.tachidesk.manga.impl.util.createComicInfoFile
 import suwayomi.tachidesk.manga.impl.util.getChapterCachePath
+import suwayomi.tachidesk.manga.impl.util.getChapterCbzPath
 import suwayomi.tachidesk.manga.impl.util.getChapterDownloadPath
 import suwayomi.tachidesk.manga.impl.util.storage.ImageResponse
 import suwayomi.tachidesk.manga.model.table.ChapterTable
 import suwayomi.tachidesk.manga.model.table.MangaTable
-import suwayomi.tachidesk.server.ServerConfig
 import suwayomi.tachidesk.server.serverConfig
 import suwayomi.tachidesk.util.ConversionUtil
 import java.io.File
@@ -43,20 +46,20 @@ sealed class FileType {
 
     fun getName(): String =
         when (this) {
-            is FileType.RegularFile -> {
+            is RegularFile -> {
                 this.file.name
             }
-            is FileType.ZipFile -> {
+            is ZipFile -> {
                 this.entry.name
             }
         }
 
     fun getExtension(): String =
         when (this) {
-            is FileType.RegularFile -> {
+            is RegularFile -> {
                 this.file.extension
             }
-            is FileType.ZipFile -> {
+            is ZipFile -> {
                 this.entry.name.substringAfterLast(".")
             }
         }
@@ -189,6 +192,19 @@ abstract class ChaptersFilesProvider<Type : FileType>(
 
         handleSuccessfulDownload()
 
+        // Calculate and save Koreader hash for CBZ files
+        val chapterFile = File(getChapterCbzPath(mangaId, chapterId))
+        if (chapterFile.exists()) {
+            val koreaderHash = KoreaderHelper.hashContents(chapterFile)
+            if (koreaderHash != null) {
+                transaction {
+                    ChapterTable.update({ ChapterTable.id eq chapterId }) {
+                        it[ChapterTable.koreaderHash] = koreaderHash
+                    }
+                }
+            }
+        }
+
         File(cacheChapterDir).deleteRecursively()
 
         return true
@@ -203,6 +219,8 @@ abstract class ChaptersFilesProvider<Type : FileType>(
     abstract override fun delete(): Boolean
 
     abstract fun getAsArchiveStream(): Pair<InputStream, Long>
+
+    abstract fun getArchiveSize(): Long
 
     private fun maybeConvertPages(chapterCacheFolder: File) {
         val conversions = serverConfig.downloadConversions.value
@@ -243,7 +261,7 @@ abstract class ChaptersFilesProvider<Type : FileType>(
 
     private fun convertPage(
         page: File,
-        conversion: ServerConfig.DownloadConversion,
+        conversion: DownloadConversion,
     ) {
         val (targetMime, compressionLevel) = conversion
 

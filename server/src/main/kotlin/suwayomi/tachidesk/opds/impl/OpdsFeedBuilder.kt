@@ -125,6 +125,7 @@ object OpdsFeedBuilder {
                 locale,
                 OpdsConstants.TYPE_ATOM_XML_FEED_ACQUISITION,
                 pageNum,
+                isSearchFeed = true,
             )
         builder.totalResults = total
         builder.entries.addAll(mangaEntries.map { OpdsEntryBuilder.mangaAcqEntryToEntry(it, baseUrl, locale) })
@@ -148,6 +149,7 @@ object OpdsFeedBuilder {
         sort: String?,
         filter: String?,
         locale: Locale,
+        isSearch: Boolean,
     ): String {
         val result = MangaRepository.getLibraryManga(pageNum, sort, filter, criteria)
 
@@ -200,6 +202,7 @@ object OpdsFeedBuilder {
                 currentSort = criteria.sort,
                 currentFilter = criteria.filter,
                 explicitQueryParams = criteria.toCrossFilterQueryParameters(),
+                isSearchFeed = isSearch,
             )
         builder.totalResults = result.totalCount
 
@@ -594,7 +597,7 @@ object OpdsFeedBuilder {
                 "desc", "number_desc" -> ChapterTable.sourceOrder to SortOrder.DESC
                 "date_asc" -> ChapterTable.date_upload to SortOrder.ASC
                 "date_desc" -> ChapterTable.date_upload to SortOrder.DESC
-                else -> ChapterTable.sourceOrder to (serverConfig.opdsChapterSortOrder.value ?: SortOrder.ASC)
+                else -> ChapterTable.sourceOrder to (serverConfig.opdsChapterSortOrder.value)
             }
         val currentFilter = filterParam?.lowercase() ?: if (serverConfig.opdsShowOnlyUnreadChapters.value) "unread" else "all"
         var (chapterEntries, totalChapters) =
@@ -699,6 +702,7 @@ object OpdsFeedBuilder {
                     MR.strings.opds_error_chapter_not_found.localized(locale, chapterSourceOrder),
                     locale,
                 )
+
         val builder =
             FeedBuilderInternal(
                 baseUrl,
@@ -708,13 +712,29 @@ object OpdsFeedBuilder {
                 OpdsConstants.TYPE_ATOM_XML_FEED_ACQUISITION,
                 null,
             )
-        builder.totalResults = 1
+
         mangaDetails.thumbnailUrl?.let { proxyThumbnailUrl(mangaDetails.id) }?.also {
             builder.icon = it
             builder.links.add(OpdsLinkXml(OpdsConstants.LINK_REL_IMAGE, it, OpdsConstants.TYPE_IMAGE_JPEG))
             builder.links.add(OpdsLinkXml(OpdsConstants.LINK_REL_IMAGE_THUMBNAIL, it, OpdsConstants.TYPE_IMAGE_JPEG))
         }
-        builder.entries.add(OpdsEntryBuilder.createChapterMetadataEntry(chapterMetadata, mangaDetails, baseUrl, locale))
+
+        val (primaryEntry, conflictEntry) =
+            OpdsEntryBuilder.createChapterMetadataEntries(
+                chapter = chapterMetadata,
+                manga = mangaDetails,
+                baseUrl = baseUrl,
+                locale = locale,
+            )
+
+        builder.entries.add(primaryEntry)
+        if (conflictEntry != null) {
+            builder.entries.add(conflictEntry)
+            builder.totalResults = 2
+        } else {
+            builder.totalResults = 1
+        }
+
         return OpdsXmlUtil.serializeFeedToString(builder.build())
     }
 

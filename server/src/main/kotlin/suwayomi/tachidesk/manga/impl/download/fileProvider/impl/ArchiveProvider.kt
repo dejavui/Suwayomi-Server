@@ -6,6 +6,8 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream
 import org.apache.commons.compress.archivers.zip.ZipFile
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import suwayomi.tachidesk.manga.impl.download.fileProvider.ChaptersFilesProvider
 import suwayomi.tachidesk.manga.impl.download.fileProvider.FileType
 import suwayomi.tachidesk.manga.impl.util.getChapterCachePath
@@ -13,10 +15,12 @@ import suwayomi.tachidesk.manga.impl.util.getChapterCbzPath
 import suwayomi.tachidesk.manga.impl.util.getChapterDownloadPath
 import suwayomi.tachidesk.manga.impl.util.getMangaDownloadDir
 import suwayomi.tachidesk.manga.impl.util.storage.FileDeletionHelper
+import suwayomi.tachidesk.manga.model.table.ChapterTable
 import suwayomi.tachidesk.server.ApplicationDirs
 import uy.kohesive.injekt.injectLazy
 import java.io.File
 import java.io.InputStream
+import java.util.zip.Deflater
 
 private val applicationDirs: ApplicationDirs by injectLazy()
 
@@ -58,9 +62,12 @@ class ArchiveProvider(
         }
 
         ZipArchiveOutputStream(outputFile.outputStream()).use { zipOut ->
+            zipOut.setMethod(ZipArchiveOutputStream.DEFLATED)
+            zipOut.setLevel(Deflater.DEFAULT_COMPRESSION)
             if (chapterCacheFolder.isDirectory) {
                 chapterCacheFolder.listFiles()?.sortedBy { it.name }?.forEach {
                     val entry = ZipArchiveEntry(it.name)
+                    entry.time = 0L
                     try {
                         zipOut.putArchiveEntry(entry)
                         it.inputStream().use { inputStream ->
@@ -85,6 +92,13 @@ class ArchiveProvider(
         }
 
         val cbzDeleted = cbzFile.delete()
+        if (cbzDeleted) {
+            transaction {
+                ChapterTable.update({ ChapterTable.id eq chapterId }) {
+                    it[koreaderHash] = null
+                }
+            }
+        }
         FileDeletionHelper.cleanupParentFoldersFor(cbzFile, applicationDirs.mangaDownloadsRoot)
         return cbzDeleted
     }
@@ -96,6 +110,11 @@ class ArchiveProvider(
                 ?: throw IllegalArgumentException("CBZ file not found for chapter ID: $chapterId (Manga ID: $mangaId)")
 
         return cbzFile.inputStream() to cbzFile.length()
+    }
+
+    override fun getArchiveSize(): Long {
+        val cbzFile = File(getChapterCbzPath(mangaId, chapterId))
+        return if (cbzFile.exists()) cbzFile.length() else 0L
     }
 
     private fun extractCbzFile(
