@@ -37,7 +37,6 @@ import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import suwayomi.tachidesk.global.impl.KcefWebView.Companion.toCefCookie
-import suwayomi.tachidesk.graphql.types.AuthMode
 import suwayomi.tachidesk.graphql.types.DatabaseType
 import suwayomi.tachidesk.i18n.LocalizationHelper
 import suwayomi.tachidesk.manga.impl.backup.proto.ProtoBackupExport
@@ -47,9 +46,12 @@ import suwayomi.tachidesk.manga.impl.update.Updater
 import suwayomi.tachidesk.manga.impl.util.lang.renameTo
 import suwayomi.tachidesk.server.database.databaseUp
 import suwayomi.tachidesk.server.generated.BuildConfig
+import suwayomi.tachidesk.server.settings.SettingsRegistry
 import suwayomi.tachidesk.server.util.AppMutex.handleAppMutex
 import suwayomi.tachidesk.server.util.ConfigTypeRegistration
+import suwayomi.tachidesk.server.util.ExitCode
 import suwayomi.tachidesk.server.util.SystemTray
+import suwayomi.tachidesk.server.util.shutdownApp
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import xyz.nulldev.androidcompat.AndroidCompat
@@ -85,6 +87,7 @@ class ApplicationDirs(
     val localMangaRoot
         get() = serverConfig.localSourcePath.value.ifBlank { "$dataRoot/local" }
     val webUIRoot = "$dataRoot/webUI"
+    val webUIServe = "$tempRoot/webUI-serve"
     val automatedBackupRoot
         get() = serverConfig.backupPath.value.ifBlank { "$dataRoot/backups" }
 
@@ -122,8 +125,6 @@ data class DatabaseSettings(
     val databasePassword: String,
 )
 
-val serverConfig: ServerConfig by lazy { GlobalConfigManager.module() }
-
 val androidCompat by lazy { AndroidCompat() }
 
 fun setupLogLevelUpdating(
@@ -142,17 +143,18 @@ fun setupLogLevelUpdating(
     )
 }
 
-fun <T : Any> migrateConfig(
+fun migrateConfigValue(
     configDocument: ConfigDocument,
     config: Config,
     configKey: String,
     toConfigKey: String,
-    toType: (ConfigValue) -> T?,
+    toType: (ConfigValue) -> Any?,
 ): ConfigDocument {
     try {
         val configValue = config.getValue(configKey)
         val typedValue = toType(configValue)
         if (typedValue != null) {
+            logger.debug { "Migrating config value: $configKey -> $toConfigKey" }
             return configDocument.withValue(
                 toConfigKey,
                 typedValue.toConfig("internal").getValue("internal"),
@@ -163,6 +165,54 @@ fun <T : Any> migrateConfig(
     }
 
     return configDocument
+}
+
+fun migrateConfig(
+    configDocument: ConfigDocument,
+    config: Config,
+): ConfigDocument {
+    var updatedConfig = configDocument
+
+    val settingsRequiringMigration = SettingsRegistry.getAll().filterValues { it.deprecated?.replaceWith != null }
+    settingsRequiringMigration.forEach { (name, data) ->
+        val configKey = "server.$name"
+        val toConfigKey = "server.${data.deprecated!!.replaceWith}"
+
+        try {
+            config.getValue(configKey)
+        } catch (_: ConfigException) {
+            // Ignore, no migration required
+            return@forEach
+        }
+
+        logger.debug { "Migrating config value: $configKey -> $toConfigKey" }
+
+        try {
+            if (data.deprecated!!.migrateConfig != null) {
+                updatedConfig = data.deprecated!!.migrateConfig!!(config.getValue(configKey), updatedConfig)
+                return@forEach
+            }
+
+            if (data.deprecated!!.migrateConfigValue != null) {
+                updatedConfig =
+                    migrateConfigValue(
+                        updatedConfig,
+                        config,
+                        configKey,
+                        toConfigKey,
+                        data.deprecated!!.migrateConfigValue!!,
+                    )
+                return@forEach
+            }
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to migrate config value: $configKey -> $toConfigKey" }
+            return@forEach
+        }
+
+        shutdownApp(ExitCode.ConfigMigrationMisconfiguredFailure)
+    }
+
+    return updatedConfig
 }
 
 fun serverModule(applicationDirs: ApplicationDirs): Module =
@@ -307,65 +357,7 @@ fun applicationSetup() {
             }
         } else {
             // make sure the user config file is up-to-date
-            GlobalConfigManager.updateUserConfig { config ->
-                var updatedConfig = this
-                updatedConfig =
-                    migrateConfig(
-                        updatedConfig,
-                        config,
-                        "server.basicAuthEnabled",
-                        "server.authMode",
-                        toType = {
-                            if (it.unwrapped() as? Boolean == true) {
-                                AuthMode.BASIC_AUTH.name
-                            } else {
-                                null
-                            }
-                        },
-                    )
-                updatedConfig =
-                    migrateConfig(
-                        updatedConfig,
-                        config,
-                        "server.basicAuthUsername",
-                        "server.authUsername",
-                        toType = { it.unwrapped() as? String },
-                    )
-                updatedConfig =
-                    migrateConfig(
-                        updatedConfig,
-                        config,
-                        "server.basicAuthPassword",
-                        "server.authPassword",
-                        toType = { it.unwrapped() as? String },
-                    )
-
-                // Migrate KOReader sync strategy from single to forward/backward strategies
-                try {
-                    val oldStrategy = config.getString("server.koreaderSyncStrategy")
-                    val (forward, backward) =
-                        when (oldStrategy.uppercase()) {
-                            "PROMPT" -> "PROMPT" to "PROMPT"
-                            "SILENT" -> "KEEP_REMOTE" to "KEEP_LOCAL"
-                            "SEND" -> "KEEP_LOCAL" to "KEEP_LOCAL"
-                            "RECEIVE" -> "KEEP_REMOTE" to "KEEP_REMOTE"
-                            "DISABLED" -> "DISABLED" to "DISABLED"
-                            else -> null to null
-                        }
-
-                    if (forward != null && backward != null) {
-                        updatedConfig =
-                            updatedConfig
-                                .withValue("server.koreaderSyncStrategyForward", forward.toConfig("internal").getValue("internal"))
-                                .withValue("server.koreaderSyncStrategyBackward", backward.toConfig("internal").getValue("internal"))
-                                .withoutPath("server.koreaderSyncStrategy")
-                    }
-                } catch (_: ConfigException.Missing) {
-                    // Key doesn't exist, no migration needed
-                }
-
-                updatedConfig
-            }
+            GlobalConfigManager.updateUserConfig { migrateConfig(this, it) }
         }
     } catch (e: Exception) {
         logger.error(e) { "Exception while creating initial server.conf" }
@@ -443,8 +435,8 @@ fun applicationSetup() {
 
     runMigrations(applicationDirs)
 
-    // Disable jetty's logging
     setLogLevelFor("org.eclipse.jetty", Level.OFF)
+    setLogLevelFor("com.zaxxer.hikari", Level.WARN)
 
     // socks proxy settings
     serverConfig.subscribeTo(

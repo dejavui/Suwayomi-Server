@@ -8,6 +8,7 @@ package suwayomi.tachidesk.server
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import com.typesafe.config.Config
+import io.github.config4k.toConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,7 +35,7 @@ import suwayomi.tachidesk.graphql.types.WebUIChannel
 import suwayomi.tachidesk.graphql.types.WebUIFlavor
 import suwayomi.tachidesk.graphql.types.WebUIInterface
 import suwayomi.tachidesk.manga.impl.backup.proto.models.BackupSettingsDownloadConversionType
-import suwayomi.tachidesk.manga.impl.extension.ExtensionsList.repoMatchRegex
+import suwayomi.tachidesk.manga.impl.extension.repoMatchRegex
 import suwayomi.tachidesk.server.settings.BooleanSetting
 import suwayomi.tachidesk.server.settings.DisableableDoubleSetting
 import suwayomi.tachidesk.server.settings.DisableableIntSetting
@@ -49,6 +50,7 @@ import suwayomi.tachidesk.server.settings.PathSetting
 import suwayomi.tachidesk.server.settings.SettingGroup
 import suwayomi.tachidesk.server.settings.SettingsRegistry
 import suwayomi.tachidesk.server.settings.StringSetting
+import xyz.nulldev.ts.config.GlobalConfigManager
 import xyz.nulldev.ts.config.SystemPropertyOverridableConfigModule
 import kotlin.collections.associate
 import kotlin.time.Duration
@@ -60,6 +62,8 @@ import kotlin.time.Duration.Companion.seconds
 val mutableConfigValueScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
 const val SERVER_CONFIG_MODULE_NAME = "server"
+
+val serverConfig: ServerConfig by lazy { GlobalConfigManager.module() }
 
 // Settings are ordered by "protoNumber".
 class ServerConfig(
@@ -73,6 +77,7 @@ class ServerConfig(
         group = SettingGroup.NETWORK,
         defaultValue = "0.0.0.0",
         pattern = "^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$".toRegex(),
+        excludeFromBackup = true,
     )
 
     val port: MutableStateFlow<Int> by IntSetting(
@@ -81,6 +86,7 @@ class ServerConfig(
         defaultValue = 4567,
         min = 1,
         max = 65535,
+        excludeFromBackup = true,
     )
 
     val socksProxyEnabled: MutableStateFlow<Boolean> by BooleanSetting(
@@ -113,12 +119,14 @@ class ServerConfig(
         protoNumber = 7,
         group = SettingGroup.PROXY,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val socksProxyPassword: MutableStateFlow<String> by StringSetting(
         protoNumber = 8,
         group = SettingGroup.PROXY,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val webUIFlavor: MutableStateFlow<WebUIFlavor> by EnumSetting(
@@ -149,6 +157,7 @@ class ServerConfig(
         group = SettingGroup.WEB_UI,
         defaultValue = "",
         mustExist = true,
+        excludeFromBackup = true,
     )
 
     val webUIChannel: MutableStateFlow<WebUIChannel> by EnumSetting(
@@ -179,6 +188,7 @@ class ServerConfig(
         group = SettingGroup.DOWNLOADER,
         defaultValue = "",
         mustExist = true,
+        excludeFromBackup = true,
     )
 
     val autoDownloadNewChapters: MutableStateFlow<Boolean> by BooleanSetting(
@@ -202,6 +212,7 @@ class ServerConfig(
             SettingsRegistry.SettingDeprecated(
                 replaceWith = "autoDownloadNewChaptersLimit",
                 message = "Replaced with autoDownloadNewChaptersLimit",
+                migrateConfigValue = { it.unwrapped() as? Int }
             ),
         readMigrated = { autoDownloadNewChaptersLimit.value },
         setMigrated = { autoDownloadNewChaptersLimit.value = it },
@@ -299,6 +310,13 @@ class ServerConfig(
             SettingsRegistry.SettingDeprecated(
                 replaceWith = "authMode",
                 message = "Removed - prefer authMode",
+                migrateConfigValue = {
+                    if (it.unwrapped() as? Boolean == true) {
+                        AuthMode.BASIC_AUTH.name
+                    } else {
+                        null
+                    }
+                }
             ),
         readMigrated = { authMode.value == AuthMode.BASIC_AUTH },
         setMigrated = { authMode.value = if (it) AuthMode.BASIC_AUTH else AuthMode.NONE },
@@ -314,12 +332,14 @@ class ServerConfig(
         protoNumber = 30,
         group = SettingGroup.AUTH,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val authPassword: MutableStateFlow<String> by StringSetting(
         protoNumber = 31,
         group = SettingGroup.AUTH,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val debugLogsEnabled: MutableStateFlow<Boolean> by BooleanSetting(
@@ -374,6 +394,7 @@ class ServerConfig(
         group = SettingGroup.BACKUP,
         defaultValue = "",
         mustExist = true,
+        excludeFromBackup = true,
     )
 
     val backupTime: MutableStateFlow<String> by StringSetting(
@@ -405,12 +426,14 @@ class ServerConfig(
         group = SettingGroup.LOCAL_SOURCE,
         defaultValue = "",
         mustExist = true,
+        excludeFromBackup = true,
     )
 
     val flareSolverrEnabled: MutableStateFlow<Boolean> by BooleanSetting(
         protoNumber = 43,
         defaultValue = false,
         group = SettingGroup.CLOUDFLARE,
+        excludeFromBackup = true,
     )
 
     val flareSolverrUrl: MutableStateFlow<String> by StringSetting(
@@ -500,6 +523,7 @@ class ServerConfig(
         defaultValue = AuthMode.NONE,
         enumClass = AuthMode::class,
         typeInfo = SettingsRegistry.PartialTypeInfo(imports = listOf("suwayomi.tachidesk.graphql.types.AuthMode")),
+        excludeFromBackup = true,
     )
 
     val downloadConversions: MutableStateFlow<Map<String, DownloadConversion>> by MapSetting<String, DownloadConversion>(
@@ -578,12 +602,14 @@ class ServerConfig(
         protoNumber = 60,
         group = SettingGroup.KOREADER_SYNC,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val koreaderSyncUserkey: MutableStateFlow<String> by StringSetting(
         protoNumber = 61,
         group = SettingGroup.KOREADER_SYNC,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val koreaderSyncDeviceId: MutableStateFlow<String> by StringSetting(
@@ -613,6 +639,28 @@ class ServerConfig(
         SettingsRegistry.SettingDeprecated(
             replaceWith = "koreaderSyncStrategyForward, koreaderSyncStrategyBackward",
             message = "Replaced with koreaderSyncStrategyForward and koreaderSyncStrategyBackward",
+            migrateConfig = { value, config ->
+                val oldStrategy = (value.unwrapped() as? String)?.uppercase()
+
+                val (forward, backward) =
+                    when (oldStrategy) {
+                        "PROMPT" -> "PROMPT" to "PROMPT"
+                        "SILENT" -> "KEEP_REMOTE" to "KEEP_LOCAL"
+                        "SEND" -> "KEEP_LOCAL" to "KEEP_LOCAL"
+                        "RECEIVE" -> "KEEP_REMOTE" to "KEEP_REMOTE"
+                        "DISABLED" -> "DISABLED" to "DISABLED"
+                        else -> null to null
+                    }
+
+                if (forward != null && backward != null) {
+                    config
+                        .withValue("server.koreaderSyncStrategyForward", forward.toConfig("internal").getValue("internal"))
+                        .withValue("server.koreaderSyncStrategyBackward", backward.toConfig("internal").getValue("internal"))
+                        .withoutPath("server.koreaderSyncStrategy")
+                } else {
+                    config
+                }
+            }
         ),
         readMigrated = {
             // This is a best-effort reverse mapping. It's not perfect but covers common cases.
@@ -690,24 +738,28 @@ class ServerConfig(
         defaultValue = DatabaseType.H2,
         enumClass = DatabaseType::class,
         typeInfo = SettingsRegistry.PartialTypeInfo(imports = listOf("suwayomi.tachidesk.graphql.types.DatabaseType")),
+        excludeFromBackup = true,
     )
 
     val databaseUrl: MutableStateFlow<String> by StringSetting(
         protoNumber = 70,
         group = SettingGroup.DATABASE,
         defaultValue = "postgresql://localhost:5432/suwayomi",
+        excludeFromBackup = true,
     )
 
     val databaseUsername: MutableStateFlow<String> by StringSetting(
         protoNumber = 71,
         group = SettingGroup.DATABASE,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val databasePassword: MutableStateFlow<String> by StringSetting(
         protoNumber = 72,
         group = SettingGroup.DATABASE,
         defaultValue = "",
+        excludeFromBackup = true,
     )
 
     val koreaderSyncStrategyForward: MutableStateFlow<KoreaderSyncConflictStrategy> by EnumSetting(
@@ -728,6 +780,17 @@ class ServerConfig(
         description = "Strategy to apply when remote progress is older than local.",
     )
 
+    val webUISubpath: MutableStateFlow<String> by StringSetting(
+        protoNumber = 75,
+        group = SettingGroup.WEB_UI,
+        defaultValue = "",
+        pattern = "^(/[a-zA-Z0-9._-]+)*$".toRegex(),
+        description = "Serve WebUI under a subpath (e.g., /manga). Leave empty for root path. Must start with / if specified.",
+        requiresRestart = true,
+        excludeFromBackup = true,
+    )
+
+
     /** ****************************************************************** **/
     /**                                                                    **/
     /**                          Renamed settings                          **/
@@ -742,6 +805,7 @@ class ServerConfig(
             SettingsRegistry.SettingDeprecated(
                 replaceWith = "authUsername",
                 message = "Removed - prefer authUsername",
+                migrateConfigValue = { it.unwrapped() as? String },
             ),
         readMigrated = { authUsername.value },
         setMigrated = { authUsername.value = it },
@@ -755,6 +819,7 @@ class ServerConfig(
             SettingsRegistry.SettingDeprecated(
                 replaceWith = "authPassword",
                 message = "Removed - prefer authPassword",
+                migrateConfigValue = { it.unwrapped() as? String },
             ),
         readMigrated = { authPassword.value },
         setMigrated = { authPassword.value = it },

@@ -1,14 +1,28 @@
 package suwayomi.tachidesk.server.settings
 
+import com.typesafe.config.ConfigValue
+import com.typesafe.config.parser.ConfigDocument
 import kotlin.reflect.KClass
 
 /**
  * Registry to track all settings for automatic updating and validation
  */
 object SettingsRegistry {
+    /**
+     * Requires either [migrateConfigValue] or [migrateConfig] to be set.
+     * If neither is specified, the server will exit on startup due to being misconfigured.
+     */
     data class SettingDeprecated(
         val replaceWith: String? = null,
         val message: String,
+        /**
+         * For cases which do not require custom config miration logic.
+         */
+        val migrateConfigValue: ((value: ConfigValue) -> Any?)? = null,
+        /**
+         * For cases which require complete control over the config migration.
+         */
+        val migrateConfig: ((value: ConfigValue, config: ConfigDocument) -> ConfigDocument)? = null
     )
 
     interface ITypeInfo {
@@ -58,6 +72,7 @@ object SettingsRegistry {
         val deprecated: SettingDeprecated? = null,
         val requiresRestart: Boolean,
         val description: String? = null,
+        val excludeFromBackup: Boolean? = null,
     )
 
     private val settings = mutableMapOf<String, SettingMetadata>()

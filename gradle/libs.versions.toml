@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.2.10"
+kotlin = "2.2.20"
 coroutines = "1.10.2"
 serialization = "1.9.0"
 okhttp = "5.1.0" # Major version is locked by Tachiyomi extensions
@@ -7,15 +7,15 @@ javalin = "6.7.0"
 jte = "3.2.1"
 jackson = "2.18.3" # jackson version locked by javalin, ref: `io.javalin.core.util.OptionalDependency`
 exposed = "0.61.0"
-dex2jar = "v64" # Stuck until https://github.com/ThexXTURBOXx/dex2jar/issues/27 is fixed
+dex2jar = "2.4.32"
 polyglot = "24.2.2"
 settings = "1.3.0"
 twelvemonkeys = "3.12.0"
 graphqlkotlin = "8.8.1"
 xmlserialization = "0.91.2"
-ktlint = "1.6.0"
+ktlint = "1.7.1"
 koin = "4.1.1"
-moko = "0.25.0"
+moko = "0.25.1"
 
 [libraries]
 # Kotlin
@@ -37,7 +37,7 @@ serialization-xml = { module = "io.github.pdvrieze.xmlutil:serialization-jvm", v
 
 # Logging
 slf4japi = "org.slf4j:slf4j-api:2.0.17"
-logback = "ch.qos.logback:logback-classic:1.5.18"
+logback = "ch.qos.logback:logback-classic:1.5.19"
 kotlinlogging = "io.github.oshai:kotlin-logging-jvm:7.0.13"
 
 # OkHttp
@@ -67,8 +67,9 @@ exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "e
 exposed-dao = { module = "org.jetbrains.exposed:exposed-dao", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
 exposed-javatime = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
-postgres = "org.postgresql:postgresql:42.7.7"
+postgres = "org.postgresql:postgresql:42.7.8"
 h2 = "com.h2database:h2:1.4.200" # current database driver, can't update to h2 v2 without sql migration
+hikaricp = "com.zaxxer:HikariCP:7.0.2"
 
 # Exposed Migrations
 exposed-migrations = "com.github.Suwayomi:exposed-migrations:3.8.0"
@@ -87,7 +88,7 @@ rxjava = "io.reactivex:rxjava:1.3.8"
 jsoup = "org.jsoup:jsoup:1.21.2"
 
 # Config
-config = "com.typesafe:config:1.4.4"
+config = "com.typesafe:config:1.4.5"
 config4k = "io.github.config4k:config4k:0.7.0"
 
 # Sort
@@ -97,9 +98,9 @@ sort = "com.github.gpanther:java-nat-sort:natural-comparator-1.1"
 android-stubs = "com.github.Suwayomi:android-jar:1.0.0"
 
 # Asm modificiation
-asm = "org.ow2.asm:asm:9.5" # version locked by Dex2Jar
-dex2jar-translator = { module = "com.github.ThexXTURBOXx.dex2jar:dex-translator", version.ref = "dex2jar" }
-dex2jar-tools = { module = "com.github.ThexXTURBOXx.dex2jar:dex-tools", version.ref = "dex2jar" }
+asm = "org.ow2.asm:asm:9.8" # version locked by Dex2Jar
+dex2jar-translator = { module = "de.femtopedia.dex2jar:dex-translator", version.ref = "dex2jar" }
+dex2jar-tools = { module = "de.femtopedia.dex2jar:dex-tools", version.ref = "dex2jar" }
 
 # APK
 apk-parser = "net.dongliu:apk-parser:2.6.10"
@@ -116,7 +117,7 @@ commonscompress = "org.apache.commons:commons-compress:1.28.0"
 junrar = "com.github.junrar:junrar:7.5.5"
 
 # AES/CBC/PKCS7Padding Cypher provider
-bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.81"
+bouncycastle = "org.bouncycastle:bcprov-jdk18on:1.82"
 
 # AndroidX annotations
 android-annotations = "androidx.annotation:annotation:1.9.1"
@@ -144,7 +145,7 @@ twelvemonkeys-imageio-webp = { module = "com.twelvemonkeys.imageio:imageio-webp"
 imageio-webp = "com.github.usefulness:webp-imageio:0.10.2"
 
 # Testing
-mockk = "io.mockk:mockk:1.14.5"
+mockk = "io.mockk:mockk:1.14.6"
 
 # cron scheduler
 cron4j = "it.sauronsoftware.cron4j:cron4j:2.2.5"
@@ -171,7 +172,7 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin"}
 
 # Linter
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "13.0.0"}
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version = "13.1.0"}
 
 # Build config
 buildconfig = { id = "com.github.gmazzo.buildconfig", version = "5.6.8"}

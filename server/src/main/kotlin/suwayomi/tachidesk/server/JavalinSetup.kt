@@ -19,7 +19,6 @@ import io.javalin.http.HttpStatus
 import io.javalin.http.NotFoundResponse
 import io.javalin.http.RedirectResponse
 import io.javalin.http.UnauthorizedResponse
-import io.javalin.http.staticfiles.Location
 import io.javalin.rendering.template.JavalinJte
 import io.javalin.websocket.WsContext
 import kotlinx.coroutines.CoroutineScope
@@ -27,7 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.future.future
-import kotlinx.coroutines.runBlocking
 import org.eclipse.jetty.server.ServerConnector
 import suwayomi.tachidesk.global.GlobalAPI
 import suwayomi.tachidesk.graphql.GraphQL
@@ -41,8 +39,8 @@ import suwayomi.tachidesk.server.user.UserType
 import suwayomi.tachidesk.server.user.getUserFromContext
 import suwayomi.tachidesk.server.user.getUserFromWsContext
 import suwayomi.tachidesk.server.util.Browser
+import suwayomi.tachidesk.server.util.ServerSubpath
 import suwayomi.tachidesk.server.util.WebInterfaceManager
-import uy.kohesive.injekt.injectLazy
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.Locale
@@ -53,8 +51,6 @@ import kotlin.time.Duration.Companion.days
 object JavalinSetup {
     private val logger = KotlinLogging.logger {}
 
-    private val applicationDirs: ApplicationDirs by injectLazy()
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun <T> future(block: suspend CoroutineScope.() -> T): CompletableFuture<T> = scope.future(block = block)
@@ -64,22 +60,10 @@ object JavalinSetup {
             Javalin.create { config ->
                 val templateEngine = TemplateEngine.createPrecompiled(ContentType.Html)
                 config.fileRenderer(JavalinJte(templateEngine))
-                if (serverConfig.webUIEnabled.value) {
-                    val serveWebUI = {
-                        config.spaRoot.addFile("/", applicationDirs.webUIRoot + "/index.html", Location.EXTERNAL)
-                    }
-                    WebInterfaceManager.setServeWebUI(serveWebUI)
 
-                    runBlocking {
-                        WebInterfaceManager.setupWebUI()
-                    }
+                WebInterfaceManager.setup(config)
 
-                    logger.info { "Serving web static files for ${serverConfig.webUIFlavor.value}" }
-                    config.staticFiles.add(applicationDirs.webUIRoot, Location.EXTERNAL)
-                    serveWebUI()
-
-                    // config.registerPlugin(OpenApiPlugin(getOpenApiOptions()))
-                }
+                // config.registerPlugin(OpenApiPlugin(getOpenApiOptions()))
 
                 var connectorAdded = false
                 config.jetty.modifyServer { server ->
@@ -120,7 +104,7 @@ object JavalinSetup {
                 }
 
                 config.router.apiBuilder {
-                    path("api/") {
+                    path(ServerSubpath.maybeAddAsPrefix("api/")) {
                         path("v1/") {
                             GlobalAPI.defineEndpoints()
                             MangaAPI.defineEndpoints()
@@ -140,7 +124,9 @@ object JavalinSetup {
                 }
             }
 
-        app.get("/login.html") { ctx ->
+        val loginPath = ServerSubpath.maybeAddAsPrefix("/login.html")
+
+        app.get(loginPath) { ctx ->
             val locale: Locale = LocalizationHelper.ctxToLocale(ctx)
             ctx.header("content-type", "text/html")
             val httpCacheSeconds = 1.days.inWholeSeconds
@@ -154,7 +140,7 @@ object JavalinSetup {
             )
         }
 
-        app.post("/login.html") { ctx ->
+        app.post(loginPath) { ctx ->
             val username = ctx.formParam("user")
             val password = ctx.formParam("pass")
             val isValid =
@@ -162,7 +148,7 @@ object JavalinSetup {
                     password == serverConfig.authPassword.value
 
             if (isValid) {
-                val redirect = ctx.queryParam("redirect") ?: "/"
+                val redirect = ctx.queryParam("redirect") ?: ServerSubpath.maybeAddAsPrefix("/")
                 // NOTE: We currently have no session handler attached.
                 // Thus, all sessions are stored in memory and not persisted.
                 // Furthermore, default session timeout appears to be 30m
@@ -184,13 +170,14 @@ object JavalinSetup {
         }
 
         app.beforeMatched { ctx ->
-            val isWebManifest = listOf("site.webmanifest", "manifest.json", "login.html").any { ctx.path().endsWith(it) }
+            val isWebManifest =
+                listOf("site.webmanifest", "manifest.json", "login.html").any { ctx.path().endsWith(it) }
             val isPageIcon =
                 ctx.path().startsWith('/') &&
                     !ctx.path().substring(1).contains('/') &&
                     listOf(".png", ".jpg", ".ico").any { ctx.path().endsWith(it) }
             val isPreFlight = ctx.method() == HandlerType.OPTIONS
-            val isApi = ctx.path().startsWith("/api/")
+            val isApi = ctx.path().startsWith(ServerSubpath.maybeAddAsPrefix("/api/"))
 
             val requiresAuthentication = !isPreFlight && !isPageIcon && !isWebManifest
             if (!requiresAuthentication) {
@@ -212,7 +199,7 @@ object JavalinSetup {
             }
 
             if (authMode == AuthMode.SIMPLE_LOGIN && !cookieValid() && !isApi) {
-                val url = "/login.html?redirect=" + URLEncoder.encode(ctx.fullUrl(), Charsets.UTF_8)
+                val url = "$loginPath?redirect=" + URLEncoder.encode(ctx.fullUrl(), Charsets.UTF_8)
                 ctx.header("Location", url)
                 throw RedirectResponse(HttpStatus.SEE_OTHER)
             }
