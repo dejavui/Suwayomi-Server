@@ -319,6 +319,7 @@ object OpdsEntryBuilder {
                     }
                 titlePrefix = statusKey.localized(locale)
             }
+
             is ProgressSource.Remote -> {
                 idSuffix = ":remote"
                 titlePrefix = MR.strings.opds_chapter_status_synced.localized(locale, progressSource.device)
@@ -336,6 +337,14 @@ object OpdsEntryBuilder {
             }
 
         val entryTitle = "$titlePrefix ${chapter.name}"
+        val cbzFileSize =
+            if (chapter.downloaded) {
+                withContext(Dispatchers.IO) {
+                    runCatching { ChapterDownloadHelper.getArchiveStreamWithSize(manga.id, chapter.id).second }.getOrNull()
+                }
+            } else {
+                null
+            }
 
         val links = mutableListOf<OpdsLinkXml>()
         chapter.url?.let {
@@ -348,15 +357,16 @@ object OpdsEntryBuilder {
                 OpdsLinkXml(
                     OpdsConstants.LINK_REL_ACQUISITION_OPEN_ACCESS,
                     "/api/v1/chapter/${chapter.id}/download?markAsRead=${serverConfig.opdsMarkAsReadOnDownload.value}",
-                    OpdsConstants.TYPE_CBZ,
+                    serverConfig.opdsCbzMimetype.value.mediaType,
                     MR.strings.opds_linktitle_download_cbz.localized(locale),
+                    length = cbzFileSize,
                 ),
             )
         }
         if (chapter.pageCount > 0) {
             val basePageHref =
                 "/api/v1/manga/${manga.id}/chapter/${chapter.sourceOrder}/page/{pageNumber}" +
-                    "?updateProgress=${serverConfig.opdsEnablePageReadProgress.value}"
+                    "?updateProgress=${serverConfig.opdsEnablePageReadProgress.value}&opds=true"
 
             val title: String =
                 when {
@@ -369,6 +379,7 @@ object OpdsEntryBuilder {
                             }
                         titleRes.localized(locale)
                     }
+
                     progressSource is ProgressSource.Local -> {
                         val titleRes =
                             if (progressSource.lastPageRead > 0) {
@@ -378,6 +389,7 @@ object OpdsEntryBuilder {
                             }
                         titleRes.localized(locale)
                     }
+
                     progressSource is ProgressSource.Remote -> {
                         val titleRes =
                             if (progressSource.lastPageRead > 0) {
@@ -387,7 +399,11 @@ object OpdsEntryBuilder {
                             }
                         titleRes.localized(locale, progressSource.device)
                     }
-                    else -> "" // Should not happen
+
+                    else -> {
+                        // Should not happen
+                        ""
+                    }
                 }
 
             links.add(
@@ -410,15 +426,6 @@ object OpdsEntryBuilder {
                 ),
             )
         }
-
-        val cbzFileSize =
-            if (chapter.downloaded) {
-                withContext(Dispatchers.IO) {
-                    runCatching { ChapterDownloadHelper.getArchiveStreamWithSize(manga.id, chapter.id).second }.getOrNull()
-                }
-            } else {
-                null
-            }
 
         return OpdsEntryXml(
             id = "urn:suwayomi:chapter:${chapter.id}:metadata$idSuffix",

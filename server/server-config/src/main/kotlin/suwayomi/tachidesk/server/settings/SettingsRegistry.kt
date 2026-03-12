@@ -2,6 +2,7 @@ package suwayomi.tachidesk.server.settings
 
 import com.typesafe.config.ConfigValue
 import com.typesafe.config.parser.ConfigDocument
+import kotlin.collections.find
 import kotlin.reflect.KClass
 
 /**
@@ -73,11 +74,15 @@ object SettingsRegistry {
         val requiresRestart: Boolean,
         val description: String? = null,
         val excludeFromBackup: Boolean? = null,
+        val privacySafe: Boolean
     )
 
     private val settings = mutableMapOf<String, SettingMetadata>()
 
     fun register(metadata: SettingMetadata) {
+        settings.values.find { it.protoNumber == metadata.protoNumber }?.let {
+            throw IllegalStateException("Setting ${metadata.name} uses protoNumber ${it.protoNumber} already used by ${it.name}")
+        }
         settings[metadata.name] = metadata
     }
 

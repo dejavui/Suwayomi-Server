@@ -6,8 +6,7 @@ The configuration file is written in HOCON. Google is your friend if you want to
 
 ## Troubleshooting
 ### I messed up my configuration file
-- The reference configuration file can be found [here](https://github.com/Suwayomi/Suwayomi-Server/blob/master/server/src/main/resources/server-reference.conf) replace your whole configuration or erroneous keys referring to it.
-- Suwayomi will create a default configuration file when one doesn't exist, you can delete `server.conf` to get a copy of the reference configuration file after a restart.
+Suwayomi will create a default configuration file when one doesn't exist, you can delete `server.conf` to get a copy of the reference configuration file after a restart.
 
 ### I am running Suwayomi in a headless environment (docker, NAS, VPS, etc.)
 - Set `server.systemTrayEnabled` to false, it will prevent Suwayomi to attempt to create a System Tray icon.
@@ -23,7 +22,7 @@ The configuration file is written in HOCON. Google is your friend if you want to
 server.ip = "0.0.0.0"
 server.port = 4567
 ```
-- `server.ip` can be a IP or domain name.
+- `server.ip` can be an IP or domain name.
 
 ### Socks5 proxy
 ```
@@ -52,6 +51,7 @@ server.electronPath = ""
 server.webUIFlavor = "WebUI" # "WebUI" or "Custom"
 server.webUIChannel = preview # "BUNDLED" or "STABLE" or "PREVIEW"
 server.webUIUpdateCheckInterval = 23
+server.webUISubpath = ""
 ```
 - `server.webUIEnabled` controls if Suwayomi will serve `Suwayomi-WebUI` and if it downloads/updates it on startup.
 - `server.initialOpenInBrowserEnabled` controls if Suwayomi will attempt to open a brwoser/electron window on startup, disabling this on headless servers is recommended.
@@ -61,6 +61,7 @@ server.webUIUpdateCheckInterval = 23
   - Note: "Custom" would be useful if you want to test preview versions of Suwayomi-WebUI or when you are using or developing other web interfaces like the web version of Suwayomi-Sorayomi.
 - `server.webUIChannel` allows to choose which update channel to use (only valid when flavor is set to "WebUI"). Use `"BUNDLED"` to use the version included in the server download, `"STABLE"` to use the latest stable release or `"PREVIEW"` to use the latest preview release (potentially buggy).
 - `server.webUIUpdateCheckInterval` the interval time in hours at which to check for updates. Use `0` to disable update checking.
+- `server.webUISubpath` controls on which sub-path the UI is served; by default, it will be accessible on `/` (i.e. directly), with this setting it can also be set to appear at e.g. `/suwayomi`
 
 ### Downloader
 ```
@@ -78,8 +79,8 @@ server.downloadConversions = {}
 - `server.excludeEntryWithUnreadChapters = true` controls if Suwayomi will download new chapters for titles with unread chapters (requires `server.autoDownloadNewChapters`).
 - `server.autoDownloadNewChaptersLimit = 0` sets how many chapters should be downloaded at most, `0` to disable the limit; if the limit is reached, new chapters will not be downloaded (requires `server.autoDownloadNewChapters`).
 - `server.autoDownloadIgnoreReUploads = false` controls if Suwayomi will re-download re-uploads on update (requires `server.autoDownloadNewChapters`).
-- `server.downloadConversions = {}` configures optional image conversions for all downloads. This is an [JSON object](https://en.wikipedia.org/wiki/JSON#Syntax), with the source image [mime type](https://en.wikipedia.org/wiki/Media_type) as the key and an object with the target mime type and options as value.  
-  The following options are both valid:  
+- `server.downloadConversions = {}` configures optional image conversions for all downloads. This is an [JSON object](https://en.wikipedia.org/wiki/JSON#Syntax), with the source image [mime type](https://en.wikipedia.org/wiki/Media_type) as the key and an object with the target mime type or url and options as value.  
+  The following options are all valid:  
   ```
   server.downloadConversions = { "image/webp" : { target : "image/jpeg", compressionLevel = 0.8 }}
   # -- or --
@@ -87,8 +88,25 @@ server.downloadConversions = {}
     target = "image/jpeg"   # image type to convert to
     compressionLevel = 0.8  # quality in range [0,1], leave away to use default compression
   }
+  # -- a url example --
+  server.downloadConversions = { "default" : { target : "http://localhost:9999/convert" }}
+  # -- a url with all parameters example --
+  server.downloadConversions = { 
+      "default" : {
+          target : "http://localhost:9999/convert",
+          callTimeout : 10m,
+          connectTimeout : 10s,
+          headers : { 
+              "authorization" : "MyPassword"
+          }
+      }
+  }
   ```  
   A source mime type `default` can be used as fallback to convert all images; a target mime type of `none` can be used to disable conversion for a particular format.
+  
+  This is an example curl command for what Suwayomi-Server will send to the conversion url: `curl -X POST "http://localhost:9999/convert" -F "image=@cat.png;type=image/png"`
+- `server.serveConversions = {}` configures optional image conversions before serving the image to the client. It follows the same format as `server.downloadConversions`.
+
 
 ### Updater
 ```
@@ -150,11 +168,25 @@ server.backupPath = ""
 server.backupTime = "00:00"
 server.backupInterval = 1
 server.backupTTL = 14
+server.autoBackupIncludeManga = true
+server.autoBackupIncludeCategories = true
+server.autoBackupIncludeChapters = true
+server.autoBackupIncludeTracking = true
+server.autoBackupIncludeHistory = true
+server.autoBackupIncludeClientData = true
+server.autoBackupIncludeServerSettings = true
 ```
 - `server.backupPath = ""` the path where backups will be stored, if the value is empty, the default directory `backups` inside [the data directory](https://github.com/Suwayomi/Suwayomi-Server/wiki/The-Data-Directory) will be used. If you are on Windows the slashes `\` needs to be doubled(`\\`) or replaced with `/`
 - `server.backupTime = "00:00"` sets the time of day at which the automated backup should be triggered.
 - `server.backupInterval = 1` sets the interval in which the server will automatically create a backup in days, `0` to disable it.
 - `server.backupTTL = 14` sets how long backup files will be kept before they will get deleted in days, `0` to disable it.
+- `server.autoBackupIncludeManga` whether to include manga data in automatic backups
+- `server.autoBackupIncludeCategories` whether to include category data in automatic backups
+- `server.autoBackupIncludeChapters` whether to include manga chapter data in automatic backups
+- `server.autoBackupIncludeTracking` whether to include manga tracking data in automatic backups
+- `server.autoBackupIncludeHistory` whether to include manga reading history in automatic backups
+- `server.autoBackupIncludeClientData` whether to include client data in automatic backups
+- `server.autoBackupIncludeServerSettings` whether to include server settings in automatic backups
 
 ### Local Source
 ```
@@ -191,6 +223,7 @@ server.opdsMarkAsReadOnDownload = false
 server.opdsShowOnlyUnreadChapters = false
 server.opdsShowOnlyDownloadedChapters = false
 server.opdsChapterSortOrder = "DESC"
+server.opdsCbzMimetype = "MODERN"
 ```
 - `server.opdsUseBinaryFileSizes = false` controls if Suwayomi should display file sizes in binary units (KiB, MiB, GiB) or decimal (KB, MB, GB) in OPDS listings.
 - `server.opdsItemsPerPage = 50` sets the number of items per page in OPDS listings. Range: 10 <= n <= 5000.
@@ -199,10 +232,11 @@ server.opdsChapterSortOrder = "DESC"
 - `server.opdsShowOnlyUnreadChapters = false` controls if OPDS listings should only include unread chapters.
 - `server.opdsShowOnlyDownloadedChapters = false` controls if OPDS listings should only include downloaded chapters.
 - `server.opdsChapterSortOrder = "DESC"` sets the default chapter sort order in OPDS listings, either `"ASC"` or `"DESC"`
+- `server.opdsCbzMimetype = "MODERN"` controls which mimetype to use for CBZ downloads. This affects the offered link in OPDS, as well as the content type of the CBZ download. Allowed is MODERN (current IANA standard), LEGACY (deprecated mimetype for .cbz) and COMPATIBLE (deprecated mimetype for all comic archives). Use LEGACY or COMPATIBLE if older clients don't offer the chapter download (note that the chapter needs to first be downloaded in Suwayomi, before it is available in OPDS).
 
 ### KOReader Sync
 ```
-server.koreaderSyncServerUrl = "http://localhost:17200"
+server.koreaderSyncServerUrl = "https://sync.koreader.rocks/"
 server.koreaderSyncUsername = ""
 server.koreaderSyncUserkey = ""
 server.koreaderSyncDeviceId = ""
@@ -211,7 +245,7 @@ server.koreaderSyncPercentageTolerance = 1.0E-15 # range: [1.0E-15, 1.0]
 server.koreaderSyncStrategyForward = PROMPT # PROMPT, KEEP_LOCAL, KEEP_REMOTE, DISABLED
 server.koreaderSyncStrategyBackward = DISABLED # PROMPT, KEEP_LOCAL, KEEP_REMOTE, DISABLED
 ```
-- `server.koreaderSyncServerUrl` where KOReader Sync Server is running.
+- `server.koreaderSyncServerUrl` where KOReader Sync Server is running. Public servers (e.g.,  `https://sync.koreader.rocks/`, `https://kosync.ak-team.com:3042/`) or self-hosted instances can also be used.
 - `server.koreaderSyncUsername` the username with which to authenticate at the KOReader instance.
 - `server.koreaderSyncUserkey` the password/key with which to authenticate at the KOReader instance.
 - `server.koreaderSyncDeviceId` a unique ID to identify Suwayomi at the KOReader Sync Server. Leave blank to auto-generate.
@@ -226,16 +260,17 @@ server.databaseType = H2 # H2, POSTGRESQL
 server.databaseUrl = "postgresql://localhost:5432/suwayomi"
 server.databaseUsername = ""
 server.databasePassword = ""
+server.useHikariConnectionPool = true
 ```
 - `server.databaseType` chooses which type of database to use. [H2](https://en.wikipedia.org/wiki/H2_Database_Engine) is the default; it is a simple file-based database for Java applications. Since it is only based on files without a server process, file corruption can be common when the server is not shut down properly. [PostgreSQL](https://en.wikipedia.org/wiki/PostgreSQL) is a popular cross-platform, stable database. To use PostgreSQL, you need to run an instance yourself.
 - `server.databaseUrl` the URL where to find the PostgreSQL server, including the database name.
 - `server.databaseUsername` the username with which to authenticate at the PostgreSQL instance.
 - `server.databasePassword` the username with which to authenticate at the PostgreSQL instance.
+- `server.useHikariConnectionPool` use Hikari Connection Pool to connect to the database.
 
 **Note:** The example [docker-compose.yml file](https://github.com/Suwayomi/Suwayomi-Server-docker/blob/main/docker-compose.yml) contains everything you need to get started with Suwayomi+PostgreSQL. Please be aware that PostgreSQL support is currently still in beta.
 
-> [!CAUTION]
-> Be careful when restoring backups if you change these options! Server settings may be included in the backup, so restoring a backup with those settings may unintentionally switch your setup to a different database than intended.
+**Note:** These settings are excluded from backups, so a backup can be used to easily switch database installations by setting up the connection first, then restoring the backup.
 
 ## Overriding configuration options with command-line arguments
 You can override the above configuration options with command-line arguments. 
