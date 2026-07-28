@@ -7,13 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased] (Preview)
 
 ### Added
-- .
+- (**Downloads**) Try to preserve downloaded files during a chapter list update for chapters with title and/or scanlator change
+- (**Logs**) Add IP location logging
 
 ### Changed
-- .
+- (**SystemTray**) Disable DorkBox update requests
 
 ### Fixed
-- .
+- (**Tracker**) Fix Shikimori
+- (**Extension**) Fix losing installed extension in case the update fails
+- (**Source/API**) Fix graphql browse mutation (`fetchSourceManga`) with filters including nested group changes
 
 ## [v2.3.2243] - 2026-07-13
 
